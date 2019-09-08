@@ -40,6 +40,21 @@ public class AppendMessageResult {
         this(status, 0, 0, "", 0, 0, 0);
     }
 
+    /**
+     *
+     * @param status 消息追加结果，取值
+     *               PUT_OK:追加成功
+     *               END_OF_FILE:超过文件大小
+     *               MESSAGE_SIZE_EXCEEDED:消息长度超过最大允许长度
+     *               PROPERTIES_SIZE_EXCEEDED:消息属性超过最大允许长度
+     *               UNKNOWN_ERROR:未知异常
+     * @param wroteOffset 消息的物理偏移量
+     * @param wroteBytes
+     * @param msgId 消息ID
+     * @param storeTimestamp 消息存储时间戳
+     * @param logicsOffset 消息消费队列逻辑偏移量，类似于数组下标
+     * @param pagecacheRT 当前未使用
+     */
     public AppendMessageResult(AppendMessageStatus status, long wroteOffset, int wroteBytes, String msgId,
         long storeTimestamp, long logicsOffset, long pagecacheRT) {
         this.status = status;

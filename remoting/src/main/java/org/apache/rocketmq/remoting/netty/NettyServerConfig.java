@@ -17,16 +17,45 @@
 package org.apache.rocketmq.remoting.netty;
 
 public class NettyServerConfig implements Cloneable {
+    // NameServer监听端口，会被初始化为9876
     private int listenPort = 8888;
+
+    // 含义：netty业务线程池的线程个数，RocketMQ按任务类型，每个任务类型会拥有一个专门的线程池，比如发送消息，消费消息，另外再加一个其他（默认的业务线程池），
+    // 默认业务线程池，采用fixed类型，线程个数就是由serverWorkerThreads。
+    // 线程名称：RemotingExecutorThread_
+    // 作用范围：该参数目前主要用于NameServer的默认业务线程池，处理诸如broker,product,consume与NameServer的所有交互命令。
+    // 源码来源：org.apache.rocketmq.namesrv.NamesrvController#initialize()
     private int serverWorkerThreads = 8;
+
+    // 含义：业务线程池的线程个数，RocketMQ按任务类型，每个任务类型会拥有一个专门的线程池，比如发送消息，消费消息，另外再加一个其他（默认的业务线程池），
+    // 默认业务线程池，采用fixed类型，线程个数就是由serverCallbackExecutorThreads 。
+    // 线程名称：NettyServerPublicExecutor_
+    // 作用范围：broker,product,consume处理默认命令的业务线程池大小。
+    // 源码来源：org.apache.rocketmq.remoting.netty.NettyRemotingServer
     private int serverCallbackExecutorThreads = 0;
+
+    // 含义：Netty IO线程数量，Selector所在的线程个数，也就主从Reactor模型中的从Reactor线程数量 。
+    // 线程名称：NettyServerNIOSelector_
+    // 作用范围：broker,product,consume 服务端的IO线程数量。
+    // 源码来源：org.apache.rocketmq.remoting.netty.NettyRemotingServer
     private int serverSelectorThreads = 3;
+
+    // 单向（Oneway）发送特点为只负责发送消息，不等待服务器回应且没有回调函数触发，即只发送请求不等待应答。此方式发送消息的过程耗时非常短，一般在微秒级别。
+    // send oneway消息请求并发度（Broker端参数）
     private int serverOnewaySemaphoreValue = 256;
+    // 异步消息发送最大并发度(Broker端参数)
     private int serverAsyncSemaphoreValue = 64;
+
+    // 网络连接最大空闲时间，默认120S, 如果连接空闲时间超过该参数设置的值，连接将被关闭
     private int serverChannelMaxIdleTimeSeconds = 120;
 
+    // socket发送缓存区大小，默认64K
     private int serverSocketSndBufSize = NettySystemConfig.socketSndbufSize;
+
+    // socket接收缓存区大小，默认64K
     private int serverSocketRcvBufSize = NettySystemConfig.socketRcvbufSize;
+
+    // ByteBuffer是否开启缓存，建议开启
     private boolean serverPooledByteBufAllocatorEnable = true;
 
     /**
@@ -36,6 +65,7 @@ public class NettyServerConfig implements Cloneable {
      * ../glibc-2.10.1/configure \ --prefix=/usr \ --with-headers=/usr/include \
      * --host=x86_64-linux-gnu \ --build=x86_64-pc-linux-gnu \ --without-gd
      */
+    // 是否启用Epoll IO模型，Linux环境建议开启
     private boolean useEpollNativeSelector = false;
 
     public int getListenPort() {

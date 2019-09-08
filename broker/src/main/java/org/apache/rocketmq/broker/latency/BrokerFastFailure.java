@@ -55,6 +55,9 @@ public class BrokerFastFailure {
         return null;
     }
 
+    /**
+     * 开启线程，每隔10毫秒，清理过期请求
+     */
     public void start() {
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override

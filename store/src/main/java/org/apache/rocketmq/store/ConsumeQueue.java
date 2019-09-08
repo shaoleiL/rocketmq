@@ -151,6 +151,11 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据时间戳定位到物理文件,使用二分查找来加速检索
+     * @param timestamp
+     * @return
+     */
     public long getOffsetInQueueByTime(final long timestamp) {
         MappedFile mappedFile = this.mappedFileQueue.getMappedFileByTime(timestamp);
         if (mappedFile != null) {
@@ -482,12 +487,21 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据startIndex获取消息消费队列条目
+     * @param startIndex
+     * @return
+     */
     public SelectMappedBufferResult getIndexBuffer(final long startIndex) {
         int mappedFileSize = this.mappedFileSize;
+        // 首先startIndex*20得到consumequeue中的物理偏移量
         long offset = startIndex * CQ_STORE_UNIT_SIZE;
+        // 如果该offset < minLogicOffset,则返回null，说明该消息已经被删除；
+        // 如果offset >= minLogicOffset，则根据偏移量定位到具体的物理文件
         if (offset >= this.getMinLogicOffset()) {
             MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset);
             if (mappedFile != null) {
+                // 然后通过offset与物理文件大小取模获取该文件的偏移量，从而从偏移量开始连续读取20个字节即可
                 SelectMappedBufferResult result = mappedFile.selectMappedBuffer((int) (offset % mappedFileSize));
                 return result;
             }

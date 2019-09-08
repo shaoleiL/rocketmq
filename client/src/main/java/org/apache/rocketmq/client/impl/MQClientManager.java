@@ -25,6 +25,13 @@ import org.apache.rocketmq.client.log.ClientLogger;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.remoting.RPCHook;
 
+/**
+ * 整个JVM实例中只存在一个MQClientManager实例，
+ * 维护一个MQClientInstance缓存表ConcurrentMap<String ,MQClientInstance>factoryTable=new ConcurrentHashMap<String, MQClientInstance>()
+ * 也就是同一个clientId只会创建一个MQClientInstance。
+ * 单例模式
+ *
+ */
 public class MQClientManager {
     private final static InternalLogger log = ClientLogger.getLog();
     private static MQClientManager instance = new MQClientManager();
@@ -44,7 +51,11 @@ public class MQClientManager {
         return getAndCreateMQClientInstance(clientConfig, null);
     }
 
+    /**
+     * 创建MQClientInstance实例
+     */
     public MQClientInstance getAndCreateMQClientInstance(final ClientConfig clientConfig, RPCHook rpcHook) {
+        // 获取clientId，clientId为客户端IP+instance+unitname
         String clientId = clientConfig.buildMQClientId();
         MQClientInstance instance = this.factoryTable.get(clientId);
         if (null == instance) {

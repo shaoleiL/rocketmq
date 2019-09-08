@@ -21,38 +21,72 @@ import org.apache.rocketmq.common.annotation.ImportantField;
 import org.apache.rocketmq.store.ConsumeQueue;
 
 public class MessageStoreConfig {
+    /**
+     * 设置Broker的存储根目录，默认为 $Broker_Home/store
+     */
     //The root directory in which the log data is kept
     @ImportantField
     private String storePathRootDir = System.getProperty("user.home") + File.separator + "store";
 
+    /**
+     * 设置commitlog的存储目录，默认为$Broker_Home/store/commitlog
+     */
     //The directory in which the commitlog is kept
     @ImportantField
     private String storePathCommitLog = System.getProperty("user.home") + File.separator + "store"
         + File.separator + "commitlog";
 
+    /**
+     * commitlog文件的大小，默认为1G
+     */
     // CommitLog file size,default is 1G
     private int mapedFileSizeCommitLog = 1024 * 1024 * 1024;
+
+    /**
+     * ConsumeQueue存放的是定长的信息（20个字节，偏移量、size、tagscode）,默认30w * ConsumeQueue.CQ_STORE_UNIT_SIZE
+     */
     // ConsumeQueue file size,default is 30W
     private int mapedFileSizeConsumeQueue = 300000 * ConsumeQueue.CQ_STORE_UNIT_SIZE;
+
+    /**
+     *  是否开启consumeQueueExt,默认为false,
+     *  就是如果消费端消息消费速度跟不上，是否创建一个扩展的ConsumeQueue文件，
+     *  如果不开启，应该会阻塞从commitlog文件中获取消息，
+     *  并且ConsumeQueue,应该是按topic独立的
+     */
     // enable consume queue ext
     private boolean enableConsumeQueueExt = false;
+
+    /**
+     * 扩展consume文件的大小，默认为48M
+     */
     // ConsumeQueue extend file size, 48M
     private int mappedFileSizeConsumeQueueExt = 48 * 1024 * 1024;
     // Bit count of filter bit map.
     // this will be set by pipe of calculate filter bit map.
     private int bitMapLengthConsumeQueueExt = 64;
 
+    /**
+     * 刷写CommitLog的间隔时间，RocketMQ后台会启动一个线程，将消息刷写到磁盘，
+     * 这个也就是该线程每次运行后等待的时间，默认为500毫秒。flush操作，调用文件通道的force()方法
+     */
     // CommitLog flush interval
     // flush data to disk
     @ImportantField
     private int flushIntervalCommitLog = 500;
 
+    /**
+     * 提交消息到CommitLog对应的文件通道的间隔时间，原理与上面类似；
+     * 将消息写入到文件通道（调用FileChannel.write方法）得到最新的写指针，默认为200毫秒
+     */
     // Only used if TransientStorePool enabled
     // flush data to FileChannel
     @ImportantField
     private int commitIntervalCommitLog = 200;
 
     /**
+     * 在put message( 将消息按格式封装成msg放入相关队列时实用的锁机制：自旋或ReentrantLock)
+     * 默认使用自旋锁
      * introduced since 4.0.x. Determine whether to use mutex reentrantLock when putting message.<br/>
      * By default it is set to false indicating using spin lock when putting message.
      */
@@ -61,6 +95,9 @@ public class MessageStoreConfig {
     // Whether schedule flush,default is real-time
     @ImportantField
     private boolean flushCommitLogTimed = false;
+    /**
+     *  刷写到ConsumeQueue的间隔，默认为1s
+     */
     // ConsumeQueue flush interval
     private int flushIntervalConsumeQueue = 1000;
     // Resource reclaim interval
@@ -74,6 +111,9 @@ public class MessageStoreConfig {
     // When to delete,default is at 4 am
     @ImportantField
     private String deleteWhen = "04";
+    /**
+     * 表示CommitLog、consumequeue文件所在磁盘分区的最大使用量
+     */
     private int diskMaxUsedSpaceRatio = 75;
     // The number of hours to keep a log file before deleting it (in hours)
     @ImportantField

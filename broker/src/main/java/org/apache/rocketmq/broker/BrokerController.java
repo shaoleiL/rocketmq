@@ -105,26 +105,85 @@ public class BrokerController {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private static final InternalLogger LOG_PROTECTION = InternalLoggerFactory.getLogger(LoggerName.PROTECTION_LOGGER_NAME);
     private static final InternalLogger LOG_WATER_MARK = InternalLoggerFactory.getLogger(LoggerName.WATER_MARK_LOGGER_NAME);
+    /**
+     * 整个broker的配置，根据配置信息设置必要的属性，核心的有当前broker的名称，分组，是否master，历史内容的存储位置等
+     */
     private final BrokerConfig brokerConfig;
+
+    /**
+     * broker作为服务端启动nettyServer的配置
+     */
     private final NettyServerConfig nettyServerConfig;
+
+    /**
+     * broker作为客户端的NettyClient的配置
+     */
     private final NettyClientConfig nettyClientConfig;
+
+    /**
+     * 消息存储的核心配置，主要体现消息的存储位置，单个文件大小，内存刷盘频率等事关性能的配置
+     */
     private final MessageStoreConfig messageStoreConfig;
+
+    /**
+     * consumer端的消费offset的集中管理，主要的关系就是topic，group，queueid，offset
+     */
     private final ConsumerOffsetManager consumerOffsetManager;
+
+    /**
+     * consumer的管理和维护，提供consumer的注册，取消，关闭等，主要的关系是group，consumerBroupInfo
+     */
     private final ConsumerManager consumerManager;
+
+    /**
+     * consumer的过滤管理，针对consumer端的消息过滤，主要关系是topic，consumer，expression
+     */
     private final ConsumerFilterManager consumerFilterManager;
+
+    /**
+     * producer的管理和维护，提供producer的注册，取消，关闭等，主要关系是group，channel，ClientChannelInfo
+     */
     private final ProducerManager producerManager;
+
+    /**
+     * 基于netty的框架实现，主要监听客户端的网络操作，网络的链接、关闭、异常、空闲等事件操作
+     */
     private final ClientHousekeepingService clientHousekeepingService;
+
+    /**
+     * 针对consumer的请求拉取消息的事件处理，基于netty框架，解析并执行内部业务功能，最后将数据返回
+     */
     private final PullMessageProcessor pullMessageProcessor;
     private final PullRequestHoldService pullRequestHoldService;
+
+    /**
+     * 新消息到达的监听服务，联合PullRequestHostService进行消息到达的通知功能
+     */
     private final MessageArrivingListener messageArrivingListener;
+
+    /**
+     * broker对请求处理的封装类，处理对应的操作，主要有通知，重置，转换，状态等
+     */
     private final Broker2Client broker2Client;
     private final SubscriptionGroupManager subscriptionGroupManager;
     private final ConsumerIdsChangeListener consumerIdsChangeListener;
     private final RebalanceLockManager rebalanceLockManager = new RebalanceLockManager();
+
+    /**
+     * broker请求外部的封装，主要是通过netty的底层通信完成和namesrv的交互
+     */
     private final BrokerOuterAPI brokerOuterAPI;
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl(
         "BrokerControllerScheduledThread"));
+
+    /**
+     * salve的同步操作，如果broker是slave角色，执行同步操作，主要同步元数据信息
+     */
     private final SlaveSynchronize slaveSynchronize;
+
+    /**
+     * 各种队列，主要是处理发送，拉取，查询等操作，内部是多线程队列机制提高并发处理
+     */
     private final BlockingQueue<Runnable> sendThreadPoolQueue;
     private final BlockingQueue<Runnable> pullThreadPoolQueue;
     private final BlockingQueue<Runnable> queryThreadPoolQueue;
@@ -132,13 +191,37 @@ public class BrokerController {
     private final BlockingQueue<Runnable> heartbeatThreadPoolQueue;
     private final BlockingQueue<Runnable> consumerManagerThreadPoolQueue;
     private final FilterServerManager filterServerManager;
+
+    /**
+     * broker的服务状态管理，实时记录broker的操作性能
+     */
     private final BrokerStatsManager brokerStatsManager;
     private final List<SendMessageHook> sendMessageHookList = new ArrayList<SendMessageHook>();
     private final List<ConsumeMessageHook> consumeMessageHookList = new ArrayList<ConsumeMessageHook>();
+
+    /**
+     * 消息的存储功能，核心及高性能的消息存储
+     */
     private MessageStore messageStore;
+
+    /**
+     * broker作为服务的nettyServer的启动
+     */
     private RemotingServer remotingServer;
+
+    /**
+     * broker的两级服务，一个是快速提供服务操作，只是没有pull的事件处理
+     */
     private RemotingServer fastRemotingServer;
+
+    /**
+     * topic的配置管理，主要提供根据topic获得对应的topic的配置信息，涉及读写队列数量、操作权限等
+     */
     private TopicConfigManager topicConfigManager;
+
+    /**
+     * 各种线程池服务，和队列一一对应关系，执行多线程操作的配置
+     */
     private ExecutorService sendMessageExecutor;
     private ExecutorService pullMessageExecutor;
     private ExecutorService queryMessageExecutor;
@@ -147,12 +230,32 @@ public class BrokerController {
     private ExecutorService heartbeatExecutor;
     private ExecutorService consumerManageExecutor;
     private boolean updateMasterHAServerAddrPeriodically = false;
+
+    /**
+     * broker的各种操作预警机制，主要有记录操作数量
+     */
     private BrokerStats brokerStats;
     private InetSocketAddress storeHost;
+
+    /**
+     * broker的快速失败策略，主要针对系统的请求，开启该功能及时清理过期的请求，避免请求堆积
+     */
     private BrokerFastFailure brokerFastFailure;
     private Configuration configuration;
+
+    /**
+     * 文件监听服务，如果netty提供ssl安全机制，则加载对应的安全key并执行安全机制
+     */
     private FileWatchService fileWatchService;
+
+    /**
+     * 针对事物消息的验证服务
+     */
     private TransactionalMessageCheckService transactionalMessageCheckService;
+
+    /**
+     * 事物消息服务，处理接受的内容是事物消息
+     */
     private TransactionalMessageService transactionalMessageService;
     private AbstractTransactionalMessageCheckListener transactionalMessageCheckListener;
 
@@ -383,7 +486,7 @@ public class BrokerController {
                     }
                 }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
             }
-
+            // 如果角色为slave
             if (BrokerRole.SLAVE == this.messageStoreConfig.getBrokerRole()) {
                 if (this.messageStoreConfig.getHaMasterAddress() != null && this.messageStoreConfig.getHaMasterAddress().length() >= 6) {
                     this.messageStore.updateHaMasterAddress(this.messageStoreConfig.getHaMasterAddress());
@@ -391,12 +494,13 @@ public class BrokerController {
                 } else {
                     this.updateMasterHAServerAddrPeriodically = true;
                 }
-
+                // scheduleAtFixedRate() 方法用于安排指定的任务进行重复的固定速率执行，在指定的延迟后开始。
                 this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
                     @Override
                     public void run() {
                         try {
+                            // 启动定时任务进行同步元数据信息
                             BrokerController.this.slaveSynchronize.syncAll();
                         } catch (Throwable e) {
                             log.error("ScheduledTask syncAll slave exception", e);
@@ -790,29 +894,36 @@ public class BrokerController {
 
         this.registerBrokerAll(true, false, true);
 
+        final int interval = Math.max(10000, Math.min(brokerConfig.getRegisterNameServerPeriod(), 60000));
+        System.out.println("broker端心跳间隔" + interval);
+        // Broker端心跳包发送
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
             public void run() {
                 try {
+                    System.out.println("broker端心跳间隔" + interval);
                     BrokerController.this.registerBrokerAll(true, false, brokerConfig.isForceRegister());
                 } catch (Throwable e) {
                     log.error("registerBrokerAll Exception", e);
                 }
             }
         }, 1000 * 10, Math.max(10000, Math.min(brokerConfig.getRegisterNameServerPeriod(), 60000)), TimeUnit.MILLISECONDS);
+        //}, 1000 * 10, 180000, TimeUnit.MILLISECONDS);
 
         if (this.brokerStatsManager != null) {
             this.brokerStatsManager.start();
         }
 
         if (this.brokerFastFailure != null) {
+            // 开启broker的快速失败策略
             this.brokerFastFailure.start();
         }
 
         if (BrokerRole.SLAVE != messageStoreConfig.getBrokerRole()) {
             if (this.transactionalMessageCheckService != null) {
                 log.info("Start transaction service!");
+                // 开启事务
                 this.transactionalMessageCheckService.start();
             }
         }

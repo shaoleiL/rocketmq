@@ -159,6 +159,8 @@ public abstract class NettyRemotingAbstract {
     }
 
     /**
+     *
+     * 该方法其实就是一个具体命令的处理模板（模板方法），具体的命令实现由各个子类实现，该类的主要责任就是将命令封装成一个线程对象，然后丢到线程池去执行
      * Process incoming request command issued by remote peer.
      *
      * @param ctx channel handler context.
@@ -335,15 +337,20 @@ public abstract class NettyRemotingAbstract {
      * </p>
      */
     public void scanResponseTable() {
+        // 记录所有移除的请求
         final List<ResponseFuture> rfList = new LinkedList<ResponseFuture>();
+        // responseTable缓存所有正在进行的请求
         Iterator<Entry<Integer, ResponseFuture>> it = this.responseTable.entrySet().iterator();
         while (it.hasNext()) {
             Entry<Integer, ResponseFuture> next = it.next();
             ResponseFuture rep = next.getValue();
-
+            // 判断请求是否过期
             if ((rep.getBeginTimestamp() + rep.getTimeoutMillis() + 1000) <= System.currentTimeMillis()) {
+                // 释放信号量
                 rep.release();
+                // 移除当前请求
                 it.remove();
+                // 添加到移除请求列表中
                 rfList.add(rep);
                 log.warn("remove timeout request, " + rep);
             }
@@ -351,6 +358,7 @@ public abstract class NettyRemotingAbstract {
 
         for (ResponseFuture rf : rfList) {
             try {
+                // 在回调执行器中执行回调。如果回调执行器为null，则直接在当前线程中运行
                 executeInvokeCallback(rf);
             } catch (Throwable e) {
                 log.warn("scanResponseTable, operationComplete Exception", e);
@@ -358,9 +366,13 @@ public abstract class NettyRemotingAbstract {
         }
     }
 
+    /**
+     * netty同步
+     */
     public RemotingCommand invokeSyncImpl(final Channel channel, final RemotingCommand request,
         final long timeoutMillis)
         throws InterruptedException, RemotingSendRequestException, RemotingTimeoutException {
+        // opaque相当于request ID,每发送一次请求request，创建一个RemotingCommand实例
         final int opaque = request.getOpaque();
 
         try {
@@ -368,6 +380,7 @@ public abstract class NettyRemotingAbstract {
             this.responseTable.put(opaque, responseFuture);
             final SocketAddress addr = channel.remoteAddress();
             channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
+                // 轮训监听
                 @Override
                 public void operationComplete(ChannelFuture f) throws Exception {
                     if (f.isSuccess()) {

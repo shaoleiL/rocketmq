@@ -39,4 +39,12 @@ public class TopicList extends RemotingSerializable {
     public void setBrokerAddr(String brokerAddr) {
         this.brokerAddr = brokerAddr;
     }
+
+    @Override
+    public String toString() {
+        return "TopicList{" +
+                "topicList=" + topicList +
+                ", brokerAddr='" + brokerAddr + '\'' +
+                '}';
+    }
 }

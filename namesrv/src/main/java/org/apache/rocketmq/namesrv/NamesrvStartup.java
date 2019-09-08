@@ -54,7 +54,9 @@ public class NamesrvStartup {
     public static NamesrvController main0(String[] args) {
 
         try {
+            // 创建NameServer控制器
             NamesrvController controller = createNamesrvController(args);
+            // 启动控制器
             start(controller);
             String tip = "The Name Server boot success. serializeType=" + RemotingCommand.getSerializeTypeConfigInThisServer();
             log.info(tip);
@@ -68,26 +70,32 @@ public class NamesrvStartup {
         return null;
     }
 
+    /**
+     * 创建NameServer控制器
+     */
     public static NamesrvController createNamesrvController(String[] args) throws IOException, JoranException {
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
         //PackageConflictDetect.detectFastjson();
-
+        // 构建命令行选项，添加-h -n选项
         Options options = ServerUtil.buildCommandlineOptions(new Options());
+        // 添加-c -p选项，解析命令行
         commandLine = ServerUtil.parseCmdLine("mqnamesrv", args, buildCommandlineOptions(options), new PosixParser());
         if (null == commandLine) {
             System.exit(-1);
             return null;
         }
 
-        final NamesrvConfig namesrvConfig = new NamesrvConfig();
-        final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+        final NamesrvConfig namesrvConfig = new NamesrvConfig(); // NameServer业务参数
+        final NettyServerConfig nettyServerConfig = new NettyServerConfig();  // NameServer网络参数
         nettyServerConfig.setListenPort(9876);
+        // -c选项可以指定NameServer配置文件的地址
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
             if (file != null) {
                 InputStream in = new BufferedInputStream(new FileInputStream(file));
                 properties = new Properties();
                 properties.load(in);
+                // 将配置文件中的配置通过反射setter方法设置到NamesrvConfig和NettyServerConfig的对应属性上
                 MixAll.properties2Object(properties, namesrvConfig);
                 MixAll.properties2Object(properties, nettyServerConfig);
 
@@ -97,20 +105,20 @@ public class NamesrvStartup {
                 in.close();
             }
         }
-
+        // -p选项可以把所有配置的条目打印到控制台,namesrv退出
         if (commandLine.hasOption('p')) {
             MixAll.printObjectProperties(null, namesrvConfig);
             MixAll.printObjectProperties(null, nettyServerConfig);
-            System.exit(0);
+            System.exit(0);  // 正常退出
         }
-
+        // 将命令行选项的完整名称（eg：-n --> namesrvAddr）对应的选项值设置到NettyServerConfig的对应属性上
         MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), namesrvConfig);
 
         if (null == namesrvConfig.getRocketmqHome()) {
             System.out.printf("Please set the %s variable in your environment to match the location of the RocketMQ installation%n", MixAll.ROCKETMQ_HOME_ENV);
-            System.exit(-2);
+            System.exit(-2);  // 非正常退出
         }
-
+        // 日志相关配置
         LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
         JoranConfigurator configurator = new JoranConfigurator();
         configurator.setContext(lc);
@@ -118,30 +126,35 @@ public class NamesrvStartup {
         configurator.doConfigure(namesrvConfig.getRocketmqHome() + "/conf/logback_namesrv.xml");
 
         log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
-
+        // 日志打印NamesrvConfig、NettyServerConfig和配置
         MixAll.printObjectProperties(log, namesrvConfig);
         MixAll.printObjectProperties(log, nettyServerConfig);
 
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
-
+        System.out.println("NamesrvConfig = " + namesrvConfig.toString());
+        // 记住所有的配置，以防止被丢弃掉
         // remember all configs to prevent discard
         controller.getConfiguration().registerConfig(properties);
 
         return controller;
     }
 
+    /**
+     * 启动控制器
+     */
     public static NamesrvController start(final NamesrvController controller) throws Exception {
 
         if (null == controller) {
             throw new IllegalArgumentException("NamesrvController is null");
         }
-
+        // 初始化控制器，initialize()只会返回true
         boolean initResult = controller.initialize();
         if (!initResult) {
+            // 初始化失败，关闭控制器
             controller.shutdown();
             System.exit(-3);
         }
-
+        // 注册JVM钩子函数并启动服务器，以便监听Broker、消息生产者的网络请求
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
@@ -149,7 +162,7 @@ public class NamesrvStartup {
                 return null;
             }
         }));
-
+        // 启动控制器
         controller.start();
 
         return controller;

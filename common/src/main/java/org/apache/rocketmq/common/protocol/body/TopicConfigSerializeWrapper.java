@@ -43,4 +43,12 @@ public class TopicConfigSerializeWrapper extends RemotingSerializable {
     public void setDataVersion(DataVersion dataVersion) {
         this.dataVersion = dataVersion;
     }
+
+    @Override
+    public String toString() {
+        return "TopicConfigSerializeWrapper{" +
+                "topicConfigTable=" + topicConfigTable +
+                ", dataVersion=" + dataVersion +
+                '}';
+    }
 }

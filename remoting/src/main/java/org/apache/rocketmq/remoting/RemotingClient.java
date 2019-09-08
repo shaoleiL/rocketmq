@@ -27,27 +27,83 @@ import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 public interface RemotingClient extends RemotingService {
 
+    /**
+     * 更新协调服务地址列表
+     * @param addrs NameServer地址列表
+     */
     void updateNameServerAddressList(final List<String> addrs);
 
+    /**
+     * 获取协调服务地址列表
+     * @return
+     */
     List<String> getNameServerAddressList();
 
+    /**
+     * 同步通信消息改送
+     * @param addr NameServer地址
+     * @param request RemotingCommand请求对象
+     * @param timeoutMillis 同步超时时间
+     * @return RemotingCommand 返回响应信息
+     * @throws InterruptedException
+     * @throws RemotingConnectException
+     * @throws RemotingSendRequestException
+     * @throws RemotingTimeoutException
+     */
     RemotingCommand invokeSync(final String addr, final RemotingCommand request,
         final long timeoutMillis) throws InterruptedException, RemotingConnectException,
         RemotingSendRequestException, RemotingTimeoutException;
 
+    /**
+     * 异步通信消息发送
+     * @param addr NameServer地址
+     * @param request RemotingCommand请求对象
+     * @param timeoutMillis 同步超时时间
+     * @param invokeCallback 异步回调函数
+     * @throws InterruptedException
+     * @throws RemotingConnectException
+     * @throws RemotingTooMuchRequestException
+     * @throws RemotingTimeoutException
+     * @throws RemotingSendRequestException
+     */
     void invokeAsync(final String addr, final RemotingCommand request, final long timeoutMillis,
         final InvokeCallback invokeCallback) throws InterruptedException, RemotingConnectException,
         RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException;
 
+    /**
+     * 单向发送消息
+     * @param addr NameServer地址
+     * @param request RemotingCommand请求对象
+     * @param timeoutMillis 同步超时时间
+     * @throws InterruptedException
+     * @throws RemotingConnectException
+     * @throws RemotingTooMuchRequestException
+     * @throws RemotingTimeoutException
+     * @throws RemotingSendRequestException
+     */
     void invokeOneway(final String addr, final RemotingCommand request, final long timeoutMillis)
         throws InterruptedException, RemotingConnectException, RemotingTooMuchRequestException,
         RemotingTimeoutException, RemotingSendRequestException;
 
+    /**
+     * 用于注册一些底层的通信服务，比如进行无数据信息的同步工作、commintLog的同步等
+     * @param requestCode 底层业务通信规则码
+     * @param processor 注册器(单线程)
+     * @param executor 线程池，用于执行注册器的业务逻辑
+     */
     void registerProcessor(final int requestCode, final NettyRequestProcessor processor,
         final ExecutorService executor);
 
+    /**
+     * 回调函数执行线程设置，用于生产者发送消息后的回调线程池
+     * @param callbackExecutor
+     */
     void setCallbackExecutor(final ExecutorService callbackExecutor);
 
+    /**
+     * 获取回调池： NameServer地址
+     * @return
+     */
     ExecutorService getCallbackExecutor();
 
     boolean isChannelWritable(final String addr);

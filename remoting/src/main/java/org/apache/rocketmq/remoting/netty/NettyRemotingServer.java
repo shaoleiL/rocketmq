@@ -87,14 +87,15 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         this(nettyServerConfig, null);
     }
 
-    public NettyRemotingServer(final NettyServerConfig nettyServerConfig,
-        final ChannelEventListener channelEventListener) {
+    public NettyRemotingServer(final NettyServerConfig nettyServerConfig, final ChannelEventListener channelEventListener) {
+        // 指定单向和异步信号量的容量
         super(nettyServerConfig.getServerOnewaySemaphoreValue(), nettyServerConfig.getServerAsyncSemaphoreValue());
         this.serverBootstrap = new ServerBootstrap();
         this.nettyServerConfig = nettyServerConfig;
         this.channelEventListener = channelEventListener;
 
         int publicThreadNums = nettyServerConfig.getServerCallbackExecutorThreads();
+        // 公共线程池数量，默认4
         if (publicThreadNums <= 0) {
             publicThreadNums = 4;
         }
@@ -108,6 +109,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             }
         });
 
+        // eventLoopGroupBoss负责监听 TCP网络连接请求
         this.eventLoopGroupBoss = new NioEventLoopGroup(1, new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -116,8 +118,10 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 return new Thread(r, String.format("NettyBoss_%d", this.threadIndex.incrementAndGet()));
             }
         });
-
+        // 判断是否使用epoll构建selector线程池（其实就是我们常说的worker线程）
+        // 判断条件：linux平台 && 用户指定了使用epoll && epoll可用
         if (useEpoll()) {
+            // boss线程池
             this.eventLoopGroupSelector = new EpollEventLoopGroup(nettyServerConfig.getServerSelectorThreads(), new ThreadFactory() {
                 private AtomicInteger threadIndex = new AtomicInteger(0);
                 private int threadTotal = nettyServerConfig.getServerSelectorThreads();
@@ -128,6 +132,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 }
             });
         } else {
+            // boss线程池
             this.eventLoopGroupSelector = new NioEventLoopGroup(nettyServerConfig.getServerSelectorThreads(), new ThreadFactory() {
                 private AtomicInteger threadIndex = new AtomicInteger(0);
                 private int threadTotal = nettyServerConfig.getServerSelectorThreads();
@@ -138,7 +143,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 }
             });
         }
-
+        // 加载ssl上下文
         loadSslContext();
     }
 
@@ -164,8 +169,12 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             && Epoll.isAvailable();
     }
 
+    /**
+     * 启动NettyRemotingServer
+     */
     @Override
     public void start() {
+        // 这里的Worker线程池是专门用于处理Netty网络通信相关的（包括编码/解码、空闲链接管理、网络连接管理以及网络请求处理）
         this.defaultEventExecutorGroup = new DefaultEventExecutorGroup(
             nettyServerConfig.getServerWorkerThreads(),
             new ThreadFactory() {
@@ -177,7 +186,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     return new Thread(r, "NettyServerCodecThread_" + this.threadIndex.incrementAndGet());
                 }
             });
-
+        // netty api的调用，构建ServerBootstrap
         ServerBootstrap childHandler =
             this.serverBootstrap.group(this.eventLoopGroupBoss, this.eventLoopGroupSelector)
                 .channel(useEpoll() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
@@ -192,13 +201,19 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
                         ch.pipeline()
+                            // 添加握手请求处理器
                             .addLast(defaultEventExecutorGroup, HANDSHAKE_HANDLER_NAME,
                                 new HandshakeHandler(TlsSystemConfig.tlsMode))
                             .addLast(defaultEventExecutorGroup,
+                                // 编码器
                                 new NettyEncoder(),
+                                // 解码器
                                 new NettyDecoder(),
+                                // netty提供的handler，用于当Channel没有执行读、写或两者操作时，触发IdleStateEvent
                                 new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),
+                                // 连接管理
                                 new NettyConnectManageHandler(),
+                                // 请求和响应处理器
                                 new NettyServerHandler()
                             );
                     }
@@ -209,6 +224,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         }
 
         try {
+            // 将channel的socket绑定到本地地址，并配置socket以侦听连接，同步等待
             ChannelFuture sync = this.serverBootstrap.bind().sync();
             InetSocketAddress addr = (InetSocketAddress) sync.channel().localAddress();
             this.port = addr.getPort();
@@ -217,6 +233,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         }
 
         if (this.channelEventListener != null) {
+            // 启动事件执行器
             this.nettyEventExecutor.start();
         }
 
@@ -225,6 +242,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             @Override
             public void run() {
                 try {
+                    //定期扫描和过期掉已弃用的请求
                     NettyRemotingServer.this.scanResponseTable();
                 } catch (Throwable e) {
                     log.error("scanResponseTable exception", e);
@@ -237,18 +255,21 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
     public void shutdown() {
         try {
             if (this.timer != null) {
+                // 取消timer
                 this.timer.cancel();
             }
-
+            // 停止boss线程池
             this.eventLoopGroupBoss.shutdownGracefully();
-
+            // 停止worker线程池
             this.eventLoopGroupSelector.shutdownGracefully();
 
             if (this.nettyEventExecutor != null) {
+                // 停止netty事件执行器
                 this.nettyEventExecutor.shutdown();
             }
 
             if (this.defaultEventExecutorGroup != null) {
+                // 停止默认事件执行器
                 this.defaultEventExecutorGroup.shutdownGracefully();
             }
         } catch (Exception e) {
@@ -257,6 +278,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
         if (this.publicExecutor != null) {
             try {
+                // 停止公共线程池
                 this.publicExecutor.shutdown();
             } catch (Exception e) {
                 log.error("NettyRemotingServer shutdown exception, ", e);

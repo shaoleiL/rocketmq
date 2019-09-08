@@ -177,13 +177,14 @@ public class KVConfigManager {
 
                 {
                     log.info("configTable SIZE: {}", this.configTable.size());
-                    Iterator<Entry<String, HashMap<String, String>>> it =
-                        this.configTable.entrySet().iterator();
+                    Iterator<Entry<String, HashMap<String, String>>> it = this.configTable.entrySet().iterator();
                     while (it.hasNext()) {
                         Entry<String, HashMap<String, String>> next = it.next();
+                        System.out.println("namespace = " + next.getKey());
                         Iterator<Entry<String, String>> itSub = next.getValue().entrySet().iterator();
                         while (itSub.hasNext()) {
                             Entry<String, String> nextSub = itSub.next();
+                            System.out.println("configTable NS: "+next.getKey()+", Key: "+nextSub.getKey()+",  Value: " + nextSub.getValue());
                             log.info("configTable NS: {} Key: {} Value: {}", next.getKey(), nextSub.getKey(),
                                 nextSub.getValue());
                         }
