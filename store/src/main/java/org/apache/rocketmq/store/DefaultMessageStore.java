@@ -216,7 +216,7 @@ public class DefaultMessageStore implements MessageStore {
                     new StoreCheckpoint(StorePathConfigHelper.getStoreCheckpoint(this.messageStoreConfig.getStorePathRootDir()));
 
                 this.indexService.load(lastExitOK);
-
+                // 根据broker是否是正常停止，执行不同的恢复策略
                 this.recover(lastExitOK);
 
                 log.info("load over, and the max phy offset = {}", this.getMaxPhyOffset());
@@ -388,6 +388,7 @@ public class DefaultMessageStore implements MessageStore {
         PutMessageResult result = this.commitLog.putMessage(msg);
 
         long eclipseTime = this.getSystemClock().now() - beginTime;
+        // 消息写入时间过长，发出警告
         if (eclipseTime > 500) {
             log.warn("putMessage not in lock eclipse time(ms)={}, bodyLength={}", eclipseTime, msg.getBody().length);
         }
@@ -479,6 +480,16 @@ public class DefaultMessageStore implements MessageStore {
         return commitLog;
     }
 
+    /**
+     * 查找消息
+     * @param group 消费组名称 Consumer group that launches this query.
+     * @param topic 主题名称 Topic to query.
+     * @param queueId 队列ID Queue ID to query.
+     * @param offset 待拉取偏移量 Logical offset to start from.
+     * @param maxMsgNums 最大拉取消息条数 Maximum count of messages to query.
+     * @param messageFilter 消息过滤器 Message filter used to screen desired messages.
+     * @return
+     */
     public GetMessageResult getMessage(final String group, final String topic, final int queueId, final long offset,
         final int maxMsgNums,
         final MessageFilter messageFilter) {
@@ -495,29 +506,42 @@ public class DefaultMessageStore implements MessageStore {
         long beginTime = this.getSystemClock().now();
 
         GetMessageStatus status = GetMessageStatus.NO_MESSAGE_IN_QUEUE;
-        long nextBeginOffset = offset;
-        long minOffset = 0;
-        long maxOffset = 0;
+        long nextBeginOffset = offset;  // 待查找的队列偏移量
+        long minOffset = 0;  // 当前消息队列最小偏移量
+        long maxOffset = 0;  // 当前消息队列最大偏移量
 
         GetMessageResult getResult = new GetMessageResult();
 
-        final long maxOffsetPy = this.commitLog.getMaxOffset();
+        final long maxOffsetPy = this.commitLog.getMaxOffset();  // 当前commitlog文件最大偏移量
 
         ConsumeQueue consumeQueue = findConsumeQueue(topic, queueId);
         if (consumeQueue != null) {
+
+            /*
+             * 消息偏移量异常情况校对下一次拉取偏移量
+             */
             minOffset = consumeQueue.getMinOffsetInQueue();
             maxOffset = consumeQueue.getMaxOffsetInQueue();
 
             if (maxOffset == 0) {
+                // maxOffset=0,表示当前消费队列中没有消息，拉取结果: NO_ MESSAGE IN_ QUEUE。
+                // 如果当前Broker为主节点或offsetCheckInSlave为false,下次拉取偏移量依然为offset。
+                // 如果当前Broker为从节点，offsetCheckInSlave 为true,设置下次拉取偏移量为0。
                 status = GetMessageStatus.NO_MESSAGE_IN_QUEUE;
                 nextBeginOffset = nextOffsetCorrection(offset, 0);
             } else if (offset < minOffset) {
+                // offset < minOffset,表示待拉取消息偏移量小于队列的起始偏移量，拉取结果为:OFFSET_ TOO_ SMALL。
+                // 如果当前Broker为主节点或offsetCheckInSlave为false,下次拉取偏移量依然为offset。
+                // 如果当前Broker为从节点并且offsetCheckInSlave为true,'下 次拉取偏移量设置为minOffset。
                 status = GetMessageStatus.OFFSET_TOO_SMALL;
                 nextBeginOffset = nextOffsetCorrection(offset, minOffset);
             } else if (offset == maxOffset) {
+                // offset==maxOffset,如果待拉取偏移量等于队列最大偏移量，拉取结果:OFFSET OVERFLOW_ ONE。下次拉取偏移量依然为offset。
                 status = GetMessageStatus.OFFSET_OVERFLOW_ONE;
                 nextBeginOffset = nextOffsetCorrection(offset, offset);
             } else if (offset > maxOffset) {
+                // Offset > maxOffset,表示偏移量越界，拉取结果: OFFSET_ OVERFLOW_ BADLY。
+                // 根据是否是主节点、从节点，同样校对下次拉取偏移量。
                 status = GetMessageStatus.OFFSET_OVERFLOW_BADLY;
                 if (0 == minOffset) {
                     nextBeginOffset = nextOffsetCorrection(offset, minOffset);
@@ -1318,6 +1342,7 @@ public class DefaultMessageStore implements MessageStore {
                             StorePathConfigHelper.getStorePathConsumeQueue(this.messageStoreConfig.getStorePathRootDir()),
                             this.getMessageStoreConfig().getMapedFileSizeConsumeQueue(),
                             this);
+                        // 把${ROCKETMQ_HOME}/store/consumequeue/{topic}下的queue文件加载到consumeQueueTable中
                         this.putConsumeQueue(topic, queueId, logic);
                         if (!logic.load()) {
                             return false;

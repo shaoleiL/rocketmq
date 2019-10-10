@@ -42,7 +42,9 @@ public class PullRequestHoldService extends ServiceThread {
     }
 
     public void suspendPullRequest(final String topic, final int queueId, final PullRequest pullRequest) {
+        // 根据消息主题与消息队列构建key
         String key = this.buildKey(topic, queueId);
+        // 从pullRequestTable中获取topic@queueId
         ManyPullRequest mpr = this.pullRequestTable.get(key);
         if (null == mpr) {
             mpr = new ManyPullRequest();
@@ -63,6 +65,10 @@ public class PullRequestHoldService extends ServiceThread {
         return sb.toString();
     }
 
+    /**
+     * 如果开启长轮询，每5s尝试一次，判断新消息是否到达
+     * 如果未开启长轮询，则默认等待1s再次尝试
+     */
     @Override
     public void run() {
         log.info("{} service started", this.getServiceName());
@@ -94,6 +100,7 @@ public class PullRequestHoldService extends ServiceThread {
     }
 
     private void checkHoldRequest() {
+        // 遍历拉取任务表，根据主题与队列获取消息消费队列最大偏移量
         for (String key : this.pullRequestTable.keySet()) {
             String[] kArray = key.split(TOPIC_QUEUEID_SEPARATOR);
             if (2 == kArray.length) {

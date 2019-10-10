@@ -78,6 +78,7 @@ public class HAService {
 
     /**
      * 判断主从同步复制是否完成
+     * 主从同步通知实现类
      */
     private final GroupTransferService groupTransferService;
 
@@ -138,6 +139,14 @@ public class HAService {
     // this.groupTransferService.notifyTransferSome();
     // }
 
+    /**
+     * RocketMQ HA的实现原理
+     * 1)主服务器启动，并在特定端口上监听从服务器的连接。
+     * 2)从服务器主动连接主服务器，主服务器接收客户端的连接，并建立相关TCP连接。
+     * 3)从服务器主动向主服务器发送待拉取消息偏移量，主服务器解析请求并返回消息给从服务器。
+     * 4)从服务器保存消息并继续发送新的消息同步请求。
+     * @throws Exception
+     */
     public void start() throws Exception {
         // 建立HA服务端监听服务，处理客户Slave客户端监听请求
         this.acceptSocketService.beginAccept();
@@ -237,7 +246,7 @@ public class HAService {
         /**
          * {@inheritDoc}
          *
-         * 该方法是标准的基于NIO的服务端程式实例，选择器每1s处理一次处理一次连接就绪事件。
+         * 该方法是标准的基于NIO的服务端程式实例，选择器每1s处理一次连接就绪事件。
          * 连接事件就绪后，调用ServerSocketChannel的accept()方法创建SocketChannel，与服务端数据传输的通道。
          * 然后为每一个连接创建一个HAConnection对象，该HAConnection将负责Master-Slave数据同步逻辑。
          */
@@ -394,7 +403,7 @@ public class HAService {
         private SocketChannel socketChannel;
         // NIO事件选择器
         private Selector selector;
-        // 上-下写入时间戳
+        // 上一次写入时间戳
         private long lastWriteTimestamp = System.currentTimeMillis();
         // 反馈Slave当前的复制进度，commitLog文件最大偏移量
         private long currentReportedOffset = 0;

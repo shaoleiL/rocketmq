@@ -321,10 +321,13 @@ public class BrokerController {
     }
 
     public boolean initialize() throws CloneNotSupportedException {
+        // 加载${ROCKETMQ_HOME}/store/config/topic.json
         boolean result = this.topicConfigManager.load();
-
+        // 加载${ROCKETMQ_HOME}/store/config/consumerOffset.json
         result = result && this.consumerOffsetManager.load();
+        // 加载${ROCKETMQ_HOME}/store/config/subscriptionGroup.json
         result = result && this.subscriptionGroupManager.load();
+        // 加载${ROCKETMQ_HOME}/store/config/consumerFilter.json
         result = result && this.consumerFilterManager.load();
 
         if (result) {

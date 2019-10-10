@@ -17,6 +17,11 @@
 package org.apache.rocketmq.common;
 
 public class SystemClock {
+
+    /**
+     * 获取当前的系统时间
+     * @return
+     */
     public long now() {
         return System.currentTimeMillis();
     }

@@ -1,27 +1,8 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.rocketmq.example.ordermessage;
 
-import java.io.UnsupportedEncodingException;
-import java.util.List;
 import org.apache.rocketmq.client.exception.MQBrokerException;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
-import org.apache.rocketmq.client.producer.MQProducer;
 import org.apache.rocketmq.client.producer.MessageQueueSelector;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.message.Message;
@@ -29,7 +10,11 @@ import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 
-public class Producer {
+import java.io.UnsupportedEncodingException;
+import java.util.List;
+
+public class Producer2 {
+
     public static void main(String[] args) throws UnsupportedEncodingException {
         try {
             DefaultMQProducer producer = new DefaultMQProducer("please_rename_unique_group_name");
@@ -37,12 +22,20 @@ public class Producer {
             producer.start();
 
             String[] tags = new String[] {"TagA", "TagB", "TagC", "TagD", "TagE"};
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < 10; i++) {
                 int orderId = i % 10;
+                String tag = tags[i % tags.length];
+                System.out.println("tag:" + tag + ", key:" + "KEY" + i + ", body:" + "Hello RocketMQ " + i);
                 Message msg =
-                    new Message("TopicTest", tags[i % tags.length], "KEY" + i,
-                        ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
+                        new Message("TopicTest", tag, "KEY" + i,
+                                ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
                 SendResult sendResult = producer.send(msg, new MessageQueueSelector() {
+                    /**
+                     * 全局顺序、局部顺序差别就在这里。
+                     * mqs 表示所有的队列
+                     * msg 消息
+                     * arg 传进来的参数的，根据这个参数选定队列。本示例传进来的就是固定的0队列。下个局部顺序示例，这里就是动态的参数i
+                     */
                     @Override
                     public MessageQueue select(List<MessageQueue> mqs, Message msg, Object arg) {
                         Integer id = (Integer) arg;
@@ -51,7 +44,6 @@ public class Producer {
                     }
                 }, orderId);
 
-//                System.out.printf("%s%n", sendResult);
                 System.out.println("队列ID:"+ sendResult.getMessageQueue().getQueueId());
             }
 
@@ -60,4 +52,5 @@ public class Producer {
             e.printStackTrace();
         }
     }
+
 }

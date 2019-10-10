@@ -95,6 +95,13 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             this.brokerController.getMessageStore().isTransientStorePoolDeficient();
     }
 
+    /**
+     * 服务端命令处理器
+     * @param ctx
+     * @param request
+     * @return
+     * @throws RemotingCommandException
+     */
     private RemotingCommand consumerSendMsgBack(final ChannelHandlerContext ctx, final RemotingCommand request)
         throws RemotingCommandException {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
@@ -134,7 +141,9 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             return response;
         }
 
+        // 创建重试主题，重试主题名称：%RETRY% + 消费组名称
         String newTopic = MixAll.getRetryTopic(requestHeader.getGroup());
+        // 并从重试队列中随机选择一个队列，并构建TopicConfig主题配置信息
         int queueIdInt = Math.abs(this.random.nextInt() % 99999999) % subscriptionGroupConfig.getRetryQueueNums();
 
         int topicSysFlag = 0;
@@ -158,6 +167,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             return response;
         }
 
+        // 根据消息物理偏移量从commitlog文件中获取消息，同时将消息的主题存入属性中
         MessageExt msgExt = this.brokerController.getMessageStore().lookMessageByOffset(requestHeader.getOffset());
         if (null == msgExt) {
             response.setCode(ResponseCode.SYSTEM_ERROR);
@@ -173,13 +183,17 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
 
         int delayLevel = requestHeader.getDelayLevel();
 
+        // 设置重试次数
         int maxReconsumeTimes = subscriptionGroupConfig.getRetryMaxTimes();
         if (request.getVersion() >= MQVersion.Version.V3_4_9.ordinal()) {
             maxReconsumeTimes = requestHeader.getMaxReconsumeTimes();
         }
 
+        // 如果消息已重试次数超过maxReconsumeTimes，也就是超过了16次
         if (msgExt.getReconsumeTimes() >= maxReconsumeTimes
             || delayLevel < 0) {
+            // 再次改变newTopic主题为DLQ(%DLQ%)，
+            // 该主题的权限为只写，说明消息一旦进入 到DLQ队列中，RecketMQ将不负责再次调度进行消费了，需要人工干预
             newTopic = MixAll.getDLQTopic(requestHeader.getGroup());
             queueIdInt = Math.abs(this.random.nextInt() % 99999999) % DLQ_NUMS_PER_GROUP;
 
@@ -200,6 +214,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             msgExt.setDelayTimeLevel(delayLevel);
         }
 
+        // 根据原先的消息创建一个新的消息对象，重试消息会拥有自己的唯一消息ID(msgId)并存人到commitlog文件中，
+        // 并不会去更新原先消息，而是会将原先的主题、消息ID存入消息的属性中，主题名称为重试主题，其他属性与原先消息保持相同。
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         msgInner.setTopic(newTopic);
         msgInner.setBody(msgExt.getBody());
@@ -218,6 +234,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         String originMsgId = MessageAccessor.getOriginMessageId(msgExt);
         MessageAccessor.setOriginMessageId(msgInner, UtilAll.isBlank(originMsgId) ? msgExt.getMsgId() : originMsgId);
 
+        // 将消息存入到CommitLog文件中
         PutMessageResult putMessageResult = this.brokerController.getMessageStore().putMessage(msgInner);
         if (putMessageResult != null) {
             switch (putMessageResult.getPutMessageStatus()) {
@@ -349,6 +366,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         Map<String, String> oriProps = MessageDecoder.string2messageProperties(requestHeader.getProperties());
         String traFlag = oriProps.get(MessageConst.PROPERTY_TRANSACTION_PREPARED);
         if (traFlag != null && Boolean.parseBoolean(traFlag)) {
+            // Broker端在收到消息存储请求时，如果消息为prepare 消息，则执行prepareMessage方法，否则走普通消息的存储流程。
             if (this.brokerController.getBrokerConfig().isRejectTransactionMessage()) {
                 response.setCode(ResponseCode.NO_PERMISSION);
                 response.setRemark(

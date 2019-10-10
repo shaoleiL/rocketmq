@@ -23,8 +23,15 @@ import org.apache.rocketmq.remoting.RPCHook;
 import java.util.concurrent.ExecutorService;
 
 public class TransactionMQProducer extends DefaultMQProducer {
+
+    /**
+     * 事务监听器，主要定义实现本地事务状态执行、本地事务状态回查两个接口
+     */
     private TransactionListener transactionListener;
 
+    /**
+     * 事务状态回查异步执行线程池
+     */
     private ExecutorService executorService;
 
     public TransactionMQProducer() {
@@ -52,10 +59,12 @@ public class TransactionMQProducer extends DefaultMQProducer {
 
     @Override
     public TransactionSendResult sendMessageInTransaction(final Message msg, final Object arg) throws MQClientException {
+        // 如果事件监听器为空，则直接返回异常，
         if (null == this.transactionListener) {
             throw new MQClientException("TransactionListener is null", null);
         }
 
+        // 最终调用DefaultMQProducerImpl的sendMessageInTransaction方法。
         return this.defaultMQProducerImpl.sendMessageInTransaction(msg, transactionListener, arg);
     }
 

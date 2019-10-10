@@ -86,6 +86,15 @@ public class PullMessageProcessor implements NettyRequestProcessor {
         return false;
     }
 
+    /**
+     * 消息拉取
+     * @param channel 网络通道，通过该通道向消息拉取客户端发送响应结果
+     * @param request 消息拉取请求
+     * @param brokerAllowSuspend Broker端是否支持挂起，处理消息拉取时默认传入true，表示如果未找到消息则支持挂起
+     *                           如果 该参数为false，未找到消息时，直接返回客户端消息未找到
+     * @return
+     * @throws RemotingCommandException
+     */
     private RemotingCommand processRequest(final Channel channel, RemotingCommand request, boolean brokerAllowSuspend)
         throws RemotingCommandException {
         RemotingCommand response = RemotingCommand.createResponseCommand(PullMessageResponseHeader.class);
@@ -150,6 +159,7 @@ public class PullMessageProcessor implements NettyRequestProcessor {
         ConsumerFilterData consumerFilterData = null;
         if (hasSubscriptionFlag) {
             try {
+                // 根据主题、消息过滤表达式构建订阅消息实体
                 subscriptionData = FilterAPI.build(
                     requestHeader.getTopic(), requestHeader.getSubscription(), requestHeader.getExpressionType()
                 );

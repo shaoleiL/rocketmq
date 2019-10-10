@@ -36,16 +36,37 @@ import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 
 /**
+ * 本地存储的实现，也就是存储在消费端
  * Local storage implementation
  */
 public class LocalFileOffsetStore implements OffsetStore {
+    /**
+     * 消息消费进度存储目录，可以通过-Drocketmq.client.localOffsetStoreDir指定
+     * 如果未指定，则默认为主目录/.rocketmq_offset
+     */
     public final static String LOCAL_OFFSET_STORE_DIR = System.getProperty(
         "rocketmq.client.localOffsetStoreDir",
         System.getProperty("user.home") + File.separator + ".rocketmq_offsets");
     private final static InternalLogger log = ClientLogger.getLog();
+
+    /**
+     * 消息客户端
+     */
     private final MQClientInstance mQClientFactory;
+
+    /**
+     * 消息消费组
+     */
     private final String groupName;
+
+    /**
+     * 消息进度存储文件
+     */
     private final String storePath;
+
+    /**
+     * 消息消费进度(内存)
+     */
     private ConcurrentMap<MessageQueue, AtomicLong> offsetTable =
         new ConcurrentHashMap<MessageQueue, AtomicLong>();
 
@@ -58,6 +79,10 @@ public class LocalFileOffsetStore implements OffsetStore {
             "offsets.json";
     }
 
+    /**
+     * 加载消息进度存储文件
+     * @throws MQClientException
+     */
     @Override
     public void load() throws MQClientException {
         OffsetSerializeWrapper offsetSerializeWrapper = this.readLocalOffset();
@@ -128,6 +153,10 @@ public class LocalFileOffsetStore implements OffsetStore {
         return -1;
     }
 
+    /**
+     * 持久化指定消息队列进度到磁盘
+     * @param mqs 消息队列集合
+     */
     @Override
     public void persistAll(Set<MessageQueue> mqs) {
         if (null == mqs || mqs.isEmpty())
@@ -180,6 +209,11 @@ public class LocalFileOffsetStore implements OffsetStore {
         return cloneOffsetTable;
     }
 
+    /**
+     * 读取消费进度文件
+     * @return
+     * @throws MQClientException
+     */
     private OffsetSerializeWrapper readLocalOffset() throws MQClientException {
         String content = null;
         try {
@@ -187,7 +221,9 @@ public class LocalFileOffsetStore implements OffsetStore {
         } catch (IOException e) {
             log.warn("Load local offset store file exception", e);
         }
+        //判断消息消费进度文件是否存在
         if (null == content || content.length() == 0) {
+            // 如果不存在，则尝试从storePath + ".bak"中尝试加载
             return this.readLocalOffsetBak();
         } else {
             OffsetSerializeWrapper offsetSerializeWrapper = null;

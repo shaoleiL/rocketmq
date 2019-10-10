@@ -94,6 +94,7 @@ public interface MQPushConsumer extends MQConsumer {
     void subscribe(final String topic, final MessageSelector selector) throws MQClientException;
 
     /**
+     * 取消消息订阅
      * Unsubscribe consumption some topic
      *
      * @param topic message topic

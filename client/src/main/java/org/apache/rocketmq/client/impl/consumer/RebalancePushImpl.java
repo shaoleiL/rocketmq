@@ -83,7 +83,9 @@ public class RebalancePushImpl extends RebalanceImpl {
 
     @Override
     public boolean removeUnnecessaryMessageQueue(MessageQueue mq, ProcessQueue pq) {
+        // 持久化消息
         this.defaultMQPushConsumerImpl.getOffsetStore().persist(mq);
+        // 丢弃消息
         this.defaultMQPushConsumerImpl.getOffsetStore().removeOffset(mq);
         if (this.defaultMQPushConsumerImpl.isConsumeOrderly()
             && MessageModel.CLUSTERING.equals(this.defaultMQPushConsumerImpl.messageModel())) {
@@ -146,12 +148,14 @@ public class RebalancePushImpl extends RebalanceImpl {
             case CONSUME_FROM_LAST_OFFSET_AND_FROM_MIN_WHEN_BOOT_FIRST:
             case CONSUME_FROM_MIN_OFFSET:
             case CONSUME_FROM_MAX_OFFSET:
-            case CONSUME_FROM_LAST_OFFSET: {
+            case CONSUME_FROM_LAST_OFFSET: {  // 从队列最新偏移量开始消费
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
+                    // 从磁盘中读取到消息队列的消费进度，直接返回
                     result = lastOffset;
                 }
                 // First start,no offset
+                // lastOffset == -1 表示该消息队列刚刚创建
                 else if (-1 == lastOffset) {
                     if (mq.getTopic().startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
                         result = 0L;
@@ -167,22 +171,28 @@ public class RebalancePushImpl extends RebalanceImpl {
                 }
                 break;
             }
-            case CONSUME_FROM_FIRST_OFFSET: {
+            case CONSUME_FROM_FIRST_OFFSET: {  // 从头开始消费
+                // 从磁盘中读取到消息队列的消费进度
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
+                // 如果消费进度>0,则直接返回
                 if (lastOffset >= 0) {
                     result = lastOffset;
                 } else if (-1 == lastOffset) {
+                    // 如果消费进度 == -1 , 直接返回0
                     result = 0L;
                 } else {
+                    // 如果消费进度 < -1 ,则表示消息进度文件中存储了错误的偏移量
                     result = -1;
                 }
                 break;
             }
-            case CONSUME_FROM_TIMESTAMP: {
+            case CONSUME_FROM_TIMESTAMP: {  // 从消费者启动的时间戳对应的消费进度开始消费
+                // 从磁盘中读取消息队列的消费进度，如果大于0，则直接返回
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
                     result = lastOffset;
                 } else if (-1 == lastOffset) {
+                    // 如果等于-1
                     if (mq.getTopic().startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
                         try {
                             result = this.mQClientFactory.getMQAdminImpl().maxOffset(mq);
@@ -190,6 +200,8 @@ public class RebalancePushImpl extends RebalanceImpl {
                             result = -1;
                         }
                     } else {
+                        // CONSUME_FROM_TIMESTAMP模式下会尝试去操作消息存储时间戳为消费者启动的时间戳
+                        // 如果能找到，则返回找到的偏移量，否则返回0
                         try {
                             long timestamp = UtilAll.parseDate(this.defaultMQPushConsumerImpl.getDefaultMQPushConsumer().getConsumeTimestamp(),
                                 UtilAll.YYYYMMDDHHMMSS).getTime();
@@ -199,6 +211,7 @@ public class RebalancePushImpl extends RebalanceImpl {
                         }
                     }
                 } else {
+                    // 如果小于-1，则表示该消息进度文件中存储了错误的偏移量，返回-1
                     result = -1;
                 }
                 break;
@@ -214,6 +227,7 @@ public class RebalancePushImpl extends RebalanceImpl {
     @Override
     public void dispatchPullRequest(List<PullRequest> pullRequestList) {
         for (PullRequest pullRequest : pullRequestList) {
+            // 调用executePullRequestImmediately方法，将pullRequest加入到PullMessageService中，以便唤醒PullMessageService线程
             this.defaultMQPushConsumerImpl.executePullRequestImmediately(pullRequest);
             log.info("doRebalance, {}, add a new pull request {}", consumerGroup, pullRequest);
         }

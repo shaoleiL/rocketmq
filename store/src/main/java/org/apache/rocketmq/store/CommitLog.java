@@ -540,6 +540,7 @@ public class CommitLog {
         msg.setStoreTimestamp(System.currentTimeMillis());
         // Set the message body BODY CRC (consider the most appropriate setting
         // on the client)
+        //设置消息的校验信息
         msg.setBodyCRC(UtilAll.crc32(msg.getBody()));
         // Back to Results  消息追加后的结果
         AppendMessageResult result = null;
@@ -551,15 +552,20 @@ public class CommitLog {
 
         // 获取消息类型（事务消息，非事务消息，Commit消息）
         final int tranType = MessageSysFlag.getTransactionValue(msg.getSysFlag());
+        // 添加 延迟消息
         if (tranType == MessageSysFlag.TRANSACTION_NOT_TYPE
             || tranType == MessageSysFlag.TRANSACTION_COMMIT_TYPE) {
             // Delay Delivery
+            // 在存入CommitLog文件之前，如果消息的延迟级别DelayTimeLevel大于0，
             if (msg.getDelayTimeLevel() > 0) {
+                // 如果设置的延迟消息级别大于系统默认的最大值，则设置默认的最大值（默认最大级别为18）
                 if (msg.getDelayTimeLevel() > this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel()) {
                     msg.setDelayTimeLevel(this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel());
                 }
 
+                // 替换消息的主题与队列为定时任务主题SCHEDULE_TOPIC_XXXX
                 topic = ScheduleMessageService.SCHEDULE_TOPIC;
+                // 根据延迟的级别获取对应延迟队列的 queue id
                 queueId = ScheduleMessageService.delayLevel2QueueId(msg.getDelayTimeLevel());
 
                 // Backup real topic, queueId
@@ -567,6 +573,7 @@ public class CommitLog {
                 MessageAccessor.putProperty(msg, MessageConst.PROPERTY_REAL_QUEUE_ID, String.valueOf(msg.getQueueId()));
                 msg.setPropertiesString(MessageDecoder.messageProperties2String(msg.getProperties()));
 
+                // 把延时消息先存储到延时的消息队列文件中
                 msg.setTopic(topic);
                 msg.setQueueId(queueId);
             }

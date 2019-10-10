@@ -688,7 +688,6 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
         }
 
-        // 如果
         SendMessageContext context = null;
         if (brokerAddr != null) {
             brokerAddr = MixAll.brokerVIPChannel(this.defaultMQProducer.isSendMessageWithVIPChannel(), brokerAddr);
@@ -1159,6 +1158,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         Validators.checkMessage(msg, this.defaultMQProducer);
 
         SendResult sendResult = null;
+        // 为消息添加属性，TRAN_MSG和PGROUP,分别表示消息为prepare消息、消息所属的消息生产者组
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_TRANSACTION_PREPARED, "true");
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_PRODUCER_GROUP, this.defaultMQProducer.getProducerGroup());
         try {
@@ -1169,7 +1169,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
         LocalTransactionState localTransactionState = LocalTransactionState.UNKNOW;
         Throwable localException = null;
+        // 根据消息发送结果执行相应的操作
         switch (sendResult.getSendStatus()) {
+            // 如果消息发送成功
             case SEND_OK: {
                 try {
                     if (sendResult.getTransactionId() != null) {
@@ -1179,6 +1181,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     if (null != transactionId && !"".equals(transactionId)) {
                         msg.setTransactionId(transactionId);
                     }
+                    // 记录事务消息的本地状态
                     localTransactionState = tranExecuter.executeLocalTransaction(msg, arg);
                     if (null == localTransactionState) {
                         localTransactionState = LocalTransactionState.UNKNOW;
@@ -1195,6 +1198,8 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 }
             }
             break;
+
+            // 如果消息发送失败，则设置本次事务状态为LocalTransactionState.ROLLBACK_MESSAGE
             case FLUSH_DISK_TIMEOUT:
             case FLUSH_SLAVE_TIMEOUT:
             case SLAVE_NOT_AVAILABLE:
@@ -1204,6 +1209,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 break;
         }
 
+        // 结束事务。根据事务状态执行提交、回滚或暂时不处理事务
         try {
             this.endTransaction(sendResult, localTransactionState, localException);
         } catch (Exception e) {
@@ -1239,7 +1245,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         } else {
             id = MessageDecoder.decodeMessageId(sendResult.getMsgId());
         }
+        // 事务ID
         String transactionId = sendResult.getTransactionId();
+        // 根据消息所属的消息队列获取Broker的IP与端口信息
         final String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(sendResult.getMessageQueue().getBrokerName());
         EndTransactionRequestHeader requestHeader = new EndTransactionRequestHeader();
         requestHeader.setTransactionId(transactionId);
@@ -1262,6 +1270,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         requestHeader.setTranStateTableOffset(sendResult.getQueueOffset());
         requestHeader.setMsgId(sendResult.getMsgId());
         String remark = localException != null ? ("executeLocalTransactionBranch exception: " + localException.toString()) : null;
+        // 根据消息所属的消息队列获取Broker的IP与端口信息，然后发送结束事务命令，其关键就是根据本地执行事务的状态分别发送提交、回滚或“不作为”的命令
         this.mQClientFactory.getMQClientAPIImpl().endTransactionOneway(brokerAddr, requestHeader, remark,
             this.defaultMQProducer.getSendMsgTimeout());
     }

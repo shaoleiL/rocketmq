@@ -146,6 +146,7 @@ public class BrokerConfig {
     private int registerNameServerPeriod = 1000 * 30;
 
     /**
+     * 事务过期时间，只有当消息的存储时间加上过期时间大于指纹当前时间时，才对消息执行事务状态回查
      * The minimum time of the transactional message  to be checked firstly, one message only exceed this time interval
      * that can be checked.
      */
@@ -153,6 +154,7 @@ public class BrokerConfig {
     private long transactionTimeOut = 3 * 1000;
 
     /**
+     * 事务回查最大检测次数，如果超过最大检测次数还是无法获知消息的事务状态,丢弃消息（相当于回滚事务）
      * The maximum number of times the message was checked, if exceed this value, this message will be discarded.
      */
     @ImportantField

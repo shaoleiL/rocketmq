@@ -27,6 +27,7 @@ import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.logging.InternalLogger;
 
 /**
+ * 基于机房近端优先级的分配策略代理。可以指定实际的分配策略。
  * An allocate strategy proxy for based on machine room nearside priority. An actual allocate strategy can be
  * specified.
  *
